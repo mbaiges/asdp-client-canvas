@@ -245,7 +245,7 @@ function updateRoom(id, update) {
 
 function roomUpdated(data) {
     if (data.id == roomId) {
-        const updateResults = updateResults;
+        const updateResults = data.updates;
         console.log(`Room id '${data.id}' was updated`);
         console.log("Update results:");
         console.log(updateResults);
@@ -423,7 +423,6 @@ function redrawScreen() {
 function drawChangesOnScreen(changes) {
     for (const change of changes) {
         const {x, y, c} = change;
-        console.log(x, y, c)
         drawSquareInScreen(x, y, CODE_TO_COLOR[c]);
     }
 }
@@ -436,8 +435,10 @@ function paint(mouseX, mouseY) {
 
     if(res && roomId) {
         const ptr = `/${y}/${x}`
-        const update = {};
-        update[ptr] = {
+        const update = {
+            ops: {}
+        };
+        update.ops[ptr] = {
             type: "set",
             value: c
         };
@@ -451,7 +452,6 @@ function paint(mouseX, mouseY) {
 
 function draw(changes) {
     drawChangesOnScreen(changes);
-    console.log(screen);
 }
 
 function redraw() {
