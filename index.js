@@ -25,10 +25,13 @@ const CODE_TO_COLOR = {
 // Self-Described Aggregation Protocol
 
 const SDAP_MESSAGE_TYPE = {
-    CREATE:  'create',
-    GET:     'get',
-    UPDATE:  'update',
-    CHANGES: 'changes'
+    HELLO:       'hello',
+    CREATE:      'create',
+    GET:         'get',
+    UPDATE:      'update',
+    SUBSCRIBE:   'subscribe',
+    UNSUBSCRIBE: 'unsubscribe',
+    CHANGES:     'changes'
 }
 
 // Update Frequency
@@ -39,6 +42,8 @@ const UPDATE_FREQ = 100;
 
 /* WebSockets */
 const WEBSOCKETS_SERVER = "ws://localhost:9000";
+
+const LAST_CHANGES_ARR_SIZE = 200;
 
 /* Canvas */
 const BACKGROUND_CODE_COLOR = COLOR_CODES.WHITE;
@@ -69,6 +74,26 @@ var roomId = null;
 
 /* WebSockets */
 var socket = null;
+
+const CHANGE_TYPE = {
+    OWN:    "own",
+    OTHERS: "others"
+};
+
+var appliedChanges = [];
+for (let i = 0; i < LAST_CHANGES_ARR_SIZE; i++) {
+    appliedChanges.push(undefined);
+}
+var nextChangeIdx = 0;
+var lastChangeId = undefined;
+var lastChangeAt = undefined;
+
+function _updateLastChange(change) {
+    appliedChanges[nextChangeIdx] = change;
+    nextChangeIdx = (nextChangeIdx + 1) % LAST_CHANGES_ARR_SIZE;
+    lastChangeId = change.changeId;
+    lastChangeAt = change.changeAt;
+}
 
 // onLoad
 
@@ -140,7 +165,7 @@ function wsConfigure() {
     // Connection opened
     socket.addEventListener('open', (event) => {
         console.log("Connected to server");
-        // socket.send('Hello Server!');
+        hello();
     });
 
     // Listen for messages
@@ -148,6 +173,9 @@ function wsConfigure() {
         const data = JSON.parse(event.data);
         console.log('Message from server', data);
         switch(data.type) {
+            case SDAP_MESSAGE_TYPE.HELLO:
+                helloed(data);
+                break;
             case SDAP_MESSAGE_TYPE.CREATE:
                 roomCreated(data);
                 break;
@@ -157,11 +185,35 @@ function wsConfigure() {
             case SDAP_MESSAGE_TYPE.UPDATE:
                 roomUpdated(data);
                 break;
+            case SDAP_MESSAGE_TYPE.SUBSCRIBE:
+                subscribed(data);
+                break;
+            case SDAP_MESSAGE_TYPE.UNSUBSCRIBE:
+                unsubscribed(data);
+                break;
             case SDAP_MESSAGE_TYPE.CHANGES:
                 roomChanged(data);
                 break;
         }
     });
+}
+
+////////////////////
+// HELLO
+////////////////////
+
+function hello() {
+    console.log("Hello");
+    const msg = {
+        type: SDAP_MESSAGE_TYPE.HELLO,
+        username: "anonymous"
+    };
+    socket.send(JSON.stringify(msg));
+}
+
+function helloed(data) {
+    console.log("Helloed from server");
+    console.log("Username is " + data.newUsername);
 }
 
 ////////////////////
@@ -173,6 +225,8 @@ function createRoom() {
     if (roomId) {
         // if there's a room already, we create a new blank one
         newScreen();
+        // And unsubscribe
+        unsubscribeToRoomChanges(roomId);
     }
     const msg = {
         type: SDAP_MESSAGE_TYPE.CREATE,
@@ -202,7 +256,7 @@ function roomCreated(data) {
         roomIdInput.value = roomId;
     }
     console.log(`Room with id '${roomId}' created successfully.`);
-    subscribeToRoom(roomId);
+    subscribeToRoomChanges(roomId);
 }
 
 ////////////////////
@@ -223,6 +277,8 @@ function roomAcquired(data) {
     console.log(`Received room id '${data.id}'`);
     console.log("Room:");
     console.log(room);
+    lastChangeId = data.lastChangeId;
+    lastChangeAt = data.lastChangeAt;
     screen = room;
     redraw();
 }
@@ -245,10 +301,57 @@ function updateRoom(id, update) {
 
 function roomUpdated(data) {
     if (data.id == roomId) {
-        const updateResults = data.updates;
         console.log(`Room id '${data.id}' was updated`);
         console.log("Update results:");
-        console.log(updateResults);
+        console.log(data.results);
+        if (data.results) {
+            for (let result of data.results) {
+                const change = {
+                    type: CHANGE_TYPE.OWN,
+                    changeId: result.changeId,
+                    changeTime: result.change
+                };
+                _updateLastChange(change);
+            }
+        }
+    }
+}
+
+////////////////////
+// SUBSCRIBE
+////////////////////
+
+function subscribeToRoomChanges(id) {
+    console.log(`Subscribing to changes on room id '${id}'`);
+    const msg = {
+        type: SDAP_MESSAGE_TYPE.SUBSCRIBE,
+        id: roomId
+    };
+    socket.send(JSON.stringify(msg));
+}
+
+function subscribed(data) {
+    if (data.success) {
+        console.log(`Subscribed successfully to changes on room id '${data.id}'`)
+    }
+}
+
+////////////////////
+// UNSUBSCRIBE
+////////////////////
+
+function unsubscribeToRoomChanges(id) {
+    console.log(`Unsubscribing to changes on room id '${id}'`);
+    const msg = {
+        type: SDAP_MESSAGE_TYPE.UNSUBSCRIBE,
+        id: roomId
+    };
+    socket.send(JSON.stringify(msg));
+}
+
+function unsubscribed(data) {
+    if (data.success) {
+        console.log(`Unsubscribed successfully to changes on room id '${data.id}'`)
     }
 }
 
@@ -256,20 +359,39 @@ function roomUpdated(data) {
 // CHANGES
 ////////////////////
 
-function subscribeToRoomChanges(id) {
-    console.log(`Subscribing to changes on room id '${id}'`);
-    const msg = {
-        type: SDAP_MESSAGE_TYPE.CHANGES,
-        id: roomId
-    };
-    socket.send(JSON.stringify(msg));
-}
-
 function roomChanged(data) {
     const changes = data.changes;
     console.log(`Received changes from room id '${data.id}'`);
     console.log("Changes:");
     console.log(changes);
+    for (const change of changes) {
+        const ops = change.ops;
+        for (const ptr in ops) {
+            const op = ops[ptr];
+            if (op.type == 'set') { // Only supported right now
+                const p = ptr.split('/');
+                if (p.length == 3) {
+                    const [y, x] = [p[1], p[2]];
+                    const c = op.value;
+                    addSquareToScreen(x, y, c);
+                    draw([{
+                        x, 
+                        y, 
+                        c
+                    }]);
+                }
+            }
+            
+        }
+
+        const ch = {
+            type: CHANGE_TYPE.OTHERS,
+            changeId: change.changeId,
+            changeTime: change.change,
+            change: change
+        };
+        _updateLastChange(ch);
+    }
 }
 
 ////////////////////
@@ -280,6 +402,10 @@ function joinRoom() {
     if (!roomIdInput) {
         console.log('Cannot find room id input');
         return;
+    }
+
+    if (roomId) {
+        unsubscribeToRoomChanges(roomId);
     }
 
     roomId = roomIdInput.value;
