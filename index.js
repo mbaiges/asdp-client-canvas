@@ -69,8 +69,8 @@ var maxX, maxY;
 var screen = null;
 
 /* Buttons and inputs */
-var createRoomBtn = null, joinRoomBtn = null, roomIdInput = null;
-var roomId = null;
+var createRoomBtn = null, joinRoomBtn = null, roomNameInput = null;
+var roomName = null;
 
 /* WebSockets */
 var socket = null;
@@ -101,7 +101,7 @@ function onLoad() {
     // Buttons and Inputs
     createRoomBtn = document.getElementById("createRoom");
     joinRoomBtn   = document.getElementById("joinRoom");
-    roomIdInput   = document.getElementById("roomId");
+    roomNameInput   = document.getElementById("roomName");
 
     // Canvas
     canvas = document.getElementById("myCanvas");
@@ -222,11 +222,11 @@ function helloed(data) {
 
 function createRoom() {
     console.log("Creating room");
-    if (roomId) {
+    if (roomName) {
         // if there's a room already, we create a new blank one
         newScreen();
         // And unsubscribe
-        unsubscribeToRoomChanges(roomId);
+        unsubscribeToRoomChanges(roomName);
     }
     const msg = {
         type: SDAP_MESSAGE_TYPE.CREATE,
@@ -251,30 +251,31 @@ function createRoom() {
 
 function roomCreated(data) {
     const created = data.created;
-    roomId = created.id;
-    if (roomId) {
-        roomIdInput.value = roomId;
+    roomName = created.name;
+    console.log("Room " + roomName)
+    if (roomName) {
+        roomNameInput.value = roomName;
     }
-    console.log(`Room with id '${roomId}' created successfully.`);
-    subscribeToRoomChanges(roomId);
+    console.log(`Room with name '${roomName}' created successfully.`);
+    subscribeToRoomChanges(roomName);
 }
 
 ////////////////////
 // GET
 ////////////////////
 
-function getRoom(id) {
-    console.log(`Getting value for room id '${id}'`);
+function getRoom(name) {
+    console.log(`Getting value for room name '${name}'`);
     const msg = {
         type: SDAP_MESSAGE_TYPE.GET,
-        id: roomId
+        name: roomName
     };
     socket.send(JSON.stringify(msg));
 }
 
 function roomAcquired(data) {
     const room = data.value;
-    console.log(`Received room id '${data.id}'`);
+    console.log(`Received room name '${data.name}'`);
     console.log("Room:");
     console.log(room);
     lastChangeId = data.lastChangeId;
@@ -287,11 +288,11 @@ function roomAcquired(data) {
 // UPDATE
 ////////////////////
 
-function updateRoom(id, update) {
-    console.log(`Updating room id '${id}'`);
+function updateRoom(name, update) {
+    console.log(`Updating room name '${name}'`);
     const msg = {
         type:    SDAP_MESSAGE_TYPE.UPDATE,
-        id:      roomId,
+        name:    roomName,
         updates: [
             update
         ]
@@ -300,8 +301,8 @@ function updateRoom(id, update) {
 }
 
 function roomUpdated(data) {
-    if (data.id == roomId) {
-        console.log(`Room id '${data.id}' was updated`);
+    if (data.name == roomName) {
+        console.log(`Room name '${data.name}' was updated`);
         console.log("Update results:");
         console.log(data.results);
         if (data.results) {
@@ -321,18 +322,18 @@ function roomUpdated(data) {
 // SUBSCRIBE
 ////////////////////
 
-function subscribeToRoomChanges(id) {
-    console.log(`Subscribing to changes on room id '${id}'`);
+function subscribeToRoomChanges(name) {
+    console.log(`Subscribing to changes on room name '${name}'`);
     const msg = {
         type: SDAP_MESSAGE_TYPE.SUBSCRIBE,
-        id: roomId
+        name: roomName
     };
     socket.send(JSON.stringify(msg));
 }
 
 function subscribed(data) {
     if (data.success) {
-        console.log(`Subscribed successfully to changes on room id '${data.id}'`)
+        console.log(`Subscribed successfully to changes on room name '${data.name}'`)
     }
 }
 
@@ -340,18 +341,18 @@ function subscribed(data) {
 // UNSUBSCRIBE
 ////////////////////
 
-function unsubscribeToRoomChanges(id) {
-    console.log(`Unsubscribing to changes on room id '${id}'`);
+function unsubscribeToRoomChanges(name) {
+    console.log(`Unsubscribing to changes on room name '${name}'`);
     const msg = {
         type: SDAP_MESSAGE_TYPE.UNSUBSCRIBE,
-        id: roomId
+        name: roomName
     };
     socket.send(JSON.stringify(msg));
 }
 
 function unsubscribed(data) {
     if (data.success) {
-        console.log(`Unsubscribed successfully to changes on room id '${data.id}'`)
+        console.log(`Unsubscribed successfully to changes on room name '${data.name}'`)
     }
 }
 
@@ -361,7 +362,7 @@ function unsubscribed(data) {
 
 function roomChanged(data) {
     const changes = data.changes;
-    console.log(`Received changes from room id '${data.id}'`);
+    console.log(`Received changes from room name '${data.name}'`);
     console.log("Changes:");
     console.log(changes);
     for (const change of changes) {
@@ -399,19 +400,19 @@ function roomChanged(data) {
 ////////////////////
 
 function joinRoom() {
-    if (!roomIdInput) {
-        console.log('Cannot find room id input');
+    if (!roomNameInput) {
+        console.log('Cannot find room name input');
         return;
     }
 
-    if (roomId) {
-        unsubscribeToRoomChanges(roomId);
+    if (roomName) {
+        unsubscribeToRoomChanges(roomName);
     }
 
-    roomId = roomIdInput.value;
-    console.log(`Joining room id '${roomId}'`);
-    getRoom(roomId);
-    subscribeToRoomChanges(roomId);
+    roomName = roomNameInput.value;
+    console.log(`Joining room name '${roomName}'`);
+    getRoom(roomName);
+    subscribeToRoomChanges(roomName);
 }
 
 /* UI */
@@ -559,7 +560,7 @@ function paint(mouseX, mouseY) {
     const c = COLOR_CODES.RED;
     const res = addSquareToScreen(x, y, c);
 
-    if(res && roomId) {
+    if(res && roomName) {
         const ptr = `/${y}/${x}`
         const update = {
             ops: {}
@@ -568,7 +569,7 @@ function paint(mouseX, mouseY) {
             type: "set",
             value: c
         };
-        updateRoom(roomId, update);
+        updateRoom(roomName, update);
     }
 
     draw([{x,y,c}]);
