@@ -21,6 +21,11 @@ const CODE_TO_COLOR = {
     1: COLORS.RED,
     2: COLORS.BLUE
 }
+const COLOR_TO_CODE = {
+    "white": COLOR_CODES.WHITE,
+    "red": COLOR_CODES.RED,
+    "blue": COLOR_CODES.BLUE
+}
 
 // Self-Described Aggregation Protocol
 
@@ -124,12 +129,19 @@ function onLoad() {
     // TODO: Should check if it's inside canvas
     canvas.addEventListener('mousedown', function(e) {
         const [x, y] = getCursorPosition(e);
-        paint(x, y, COLORS.RED);
+        console.log(e.which)
+        if (e.which == 1) { // left click
+            paint(x, y, COLORS.RED);
+        } else if (e.which == 3) { // right click
+            paint(x, y, COLORS.WHITE);
+        }
     });
     canvas.addEventListener('mousemove', function(e) {
-        if (e.which == 1) {
-            const [x, y] = getCursorPosition(e);
+        const [x, y] = getCursorPosition(e);
+        if (e.which == 1) { // left click
             paint(x, y, COLORS.RED);
+        } else if (e.which == 3) { // right click
+            paint(x, y, COLORS.WHITE);
         }
     });
 
@@ -554,10 +566,10 @@ function drawChangesOnScreen(changes) {
     }
 }
 
-function paint(mouseX, mouseY) {
+function paint(mouseX, mouseY, color) {
     const x = Math.floor((mouseX-FRAME_BORDER_WIDTH)/BLOCK_SIZE);
     const y = Math.floor((mouseY-FRAME_BORDER_WIDTH)/BLOCK_SIZE);
-    const c = COLOR_CODES.RED;
+    const c = COLOR_TO_CODE[color];
     const res = addSquareToScreen(x, y, c);
 
     if(res && roomName) {
