@@ -258,6 +258,12 @@ function createRoom() {
         },
         value: screen
     };
+
+    roomName = roomNameInput.value;
+    if (roomName != "") {
+      msg.name = roomName;
+    }
+
     socket.send(JSON.stringify(msg));
 }
 
