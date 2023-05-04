@@ -1,2 +1,2 @@
-# asdp-client-node-canvas
-Aggregation Self-Described Protocol - Client - Node.js - Canvas
+# sdap-client-node-canvas
+Self-Described Aggregation Protocol - Client - Node.js - Canvas
